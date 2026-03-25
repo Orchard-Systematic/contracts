@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package orchard.marketdata.v1;
+
+import "google/protobuf/timestamp.proto";
+import "orchard/common/v1/common.proto";
+
+// ─── Market Data Messages ───────────────────────────────────────────
+
+message MarketDataTick {
+  orchard.common.v1.InstrumentId instrument = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  double bid = 3;
+  double ask = 4;
+  double last = 5;
+  double volume = 6;
+  double open_interest = 7;
+}
+
+message OhlcvBar {
+  orchard.common.v1.InstrumentId instrument = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string timeframe = 3;   // "1m", "5m", "1h", "1d"
+  double open = 4;
+  double high = 5;
+  double low = 6;
+  double close = 7;
+  double volume = 8;
+  double open_interest = 9;
+  double vwap = 10;
+  uint64 tick_count = 11;
+}
+
+message ForwardCurvePoint {
+  google.protobuf.Timestamp expiry = 1;
+  double price = 2;
+  double days_to_expiry = 3;
+  string contract_symbol = 4;
+}
+
+message ForwardCurve {
+  string underlying = 1;
+  google.protobuf.Timestamp as_of = 2;
+  repeated ForwardCurvePoint points = 3;
+}
+
+// ─── Market Data Service ────────────────────────────────────────────
+
+message SubscribeMarketDataRequest {
+  repeated orchard.common.v1.InstrumentId instruments = 1;
+}
+
+message HistoricalBarsRequest {
+  orchard.common.v1.InstrumentId instrument = 1;
+  string timeframe = 2;
+  google.protobuf.Timestamp start = 3;
+  google.protobuf.Timestamp end = 4;
+  uint32 limit = 5;
+}
+
+message HistoricalBarsResponse {
+  repeated OhlcvBar bars = 1;
+}
+
+message ForwardCurveRequest {
+  string underlying = 1;
+}
+
+service MarketDataService {
+  // Stream real-time ticks for subscribed instruments
+  rpc SubscribeMarketData(SubscribeMarketDataRequest) returns (stream MarketDataTick);
+
+  // Query historical OHLCV bars
+  rpc GetHistoricalBars(HistoricalBarsRequest) returns (HistoricalBarsResponse);
+
+  // Get the current forward/term-structure curve
+  rpc GetForwardCurve(ForwardCurveRequest) returns (ForwardCurve);
+}

@@ -1,0 +1,34 @@
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: csharp_namespace
+      value: OrchardSystematic.Contracts
+    - file_option: go_package
+      value: github.com/orchard-systematic/contracts/gen/go
+plugins:
+  # C# / gRPC
+  - remote: buf.build/protocolbuffers/csharp
+    out: gen/csharp
+  - remote: buf.build/grpc/csharp
+    out: gen/csharp
+
+  # Python
+  - remote: buf.build/protocolbuffers/python
+    out: gen/python
+  - remote: buf.build/grpc/python
+    out: gen/python
+
+  # TypeScript (ts-proto)
+  - remote: buf.build/community/stephenh-ts-proto
+    out: gen/typescript
+    opt:
+      - outputServices=grpc-js
+      - esModuleInterop=true
+      - outputTypeRegistry=true
+
+  # C++ (for grove)
+  - remote: buf.build/protocolbuffers/cpp
+    out: gen/cpp
+  - remote: buf.build/grpc/cpp
+    out: gen/cpp

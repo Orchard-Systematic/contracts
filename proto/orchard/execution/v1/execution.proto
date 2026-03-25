@@ -1,0 +1,199 @@
+syntax = "proto3";
+
+package orchard.execution.v1;
+
+import "google/protobuf/timestamp.proto";
+import "orchard/common/v1/common.proto";
+
+// ─── Order Messages ─────────────────────────────────────────────────
+
+enum OrderType {
+  ORDER_TYPE_UNSPECIFIED = 0;
+  ORDER_TYPE_MARKET = 1;
+  ORDER_TYPE_LIMIT = 2;
+  ORDER_TYPE_STOP = 3;
+  ORDER_TYPE_STOP_LIMIT = 4;
+  ORDER_TYPE_TRAILING_STOP = 5;
+  ORDER_TYPE_MIDPRICE = 6;
+}
+
+enum OrderStatus {
+  ORDER_STATUS_UNSPECIFIED = 0;
+  ORDER_STATUS_PENDING_NEW = 1;
+  ORDER_STATUS_NEW = 2;
+  ORDER_STATUS_PARTIALLY_FILLED = 3;
+  ORDER_STATUS_FILLED = 4;
+  ORDER_STATUS_PENDING_CANCEL = 5;
+  ORDER_STATUS_CANCELLED = 6;
+  ORDER_STATUS_REJECTED = 7;
+  ORDER_STATUS_EXPIRED = 8;
+}
+
+enum TimeInForce {
+  TIME_IN_FORCE_UNSPECIFIED = 0;
+  TIME_IN_FORCE_DAY = 1;
+  TIME_IN_FORCE_GTC = 2;
+  TIME_IN_FORCE_IOC = 3;
+  TIME_IN_FORCE_GTD = 4;
+}
+
+message Order {
+  string order_id = 1;
+  string client_order_id = 2;
+  int32 ib_order_id = 3;
+  string signal_id = 4;            // originating signal
+  string strategy_id = 5;
+
+  orchard.common.v1.InstrumentId instrument = 6;
+  orchard.common.v1.Side side = 7;
+  OrderType order_type = 8;
+  TimeInForce time_in_force = 9;
+
+  double quantity = 10;
+  double limit_price = 11;
+  double stop_price = 12;
+  double trail_amount = 13;
+
+  OrderStatus status = 14;
+  double filled_quantity = 15;
+  double average_fill_price = 16;
+  double commission = 17;
+
+  google.protobuf.Timestamp created_at = 18;
+  google.protobuf.Timestamp updated_at = 19;
+  string reject_reason = 20;
+
+  // Bracket order references
+  string parent_order_id = 21;
+  string take_profit_order_id = 22;
+  string stop_loss_order_id = 23;
+}
+
+message Fill {
+  string fill_id = 1;
+  string order_id = 2;
+  string execution_id = 3;         // IB execution ID
+  orchard.common.v1.InstrumentId instrument = 4;
+  orchard.common.v1.Side side = 5;
+  double quantity = 6;
+  double price = 7;
+  double commission = 8;
+  google.protobuf.Timestamp filled_at = 9;
+  string exchange = 10;            // actual execution venue
+}
+
+// ─── Position Messages ──────────────────────────────────────────────
+
+message Position {
+  orchard.common.v1.InstrumentId instrument = 1;
+  double quantity = 2;              // signed: +long, -short
+  double average_cost = 3;
+  double market_price = 4;
+  double market_value = 5;
+  double unrealized_pnl = 6;
+  double realized_pnl = 7;
+  double daily_pnl = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+message PortfolioSummary {
+  double net_liquidation = 1;
+  double total_unrealized_pnl = 2;
+  double total_realized_pnl = 3;
+  double daily_pnl = 4;
+  double buying_power = 5;
+  double margin_used = 6;
+  double margin_available = 7;
+  repeated Position positions = 8;
+  google.protobuf.Timestamp as_of = 9;
+}
+
+// ─── Risk Messages ──────────────────────────────────────────────────
+
+message RiskLimits {
+  double max_position_per_instrument = 1;   // max contracts per symbol
+  double max_portfolio_exposure = 2;        // max total notional
+  double max_daily_loss = 3;                // stop trading if exceeded
+  double max_order_size = 4;                // single order cap
+  uint32 max_open_orders = 5;
+}
+
+message RiskCheckResult {
+  bool passed = 1;
+  repeated string violations = 2;
+}
+
+// ─── Execution Service ──────────────────────────────────────────────
+
+message PlaceOrderRequest {
+  Order order = 1;
+}
+
+message PlaceOrderResponse {
+  string order_id = 1;
+  bool accepted = 2;
+  string rejection_reason = 3;
+}
+
+message CancelOrderRequest {
+  string order_id = 1;
+}
+
+message CancelOrderResponse {
+  bool accepted = 1;
+}
+
+message GetOrderRequest {
+  string order_id = 1;
+}
+
+message ListOrdersRequest {
+  repeated OrderStatus status_filter = 1;
+  string strategy_id = 2;
+  uint32 limit = 3;
+}
+
+message ListOrdersResponse {
+  repeated Order orders = 1;
+}
+
+message GetPortfolioRequest {}
+
+message ListFillsRequest {
+  string order_id = 1;
+  google.protobuf.Timestamp since = 2;
+  uint32 limit = 3;
+}
+
+message ListFillsResponse {
+  repeated Fill fills = 1;
+}
+
+// Stream of order status updates
+message OrderUpdate {
+  Order order = 1;
+  Fill fill = 2;              // populated only on fill events
+}
+
+service ExecutionService {
+  // Place an order through the OMS to IB
+  rpc PlaceOrder(PlaceOrderRequest) returns (PlaceOrderResponse);
+
+  // Cancel an open order
+  rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
+
+  // Get a single order by ID
+  rpc GetOrder(GetOrderRequest) returns (Order);
+
+  // List orders with optional filtering
+  rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse);
+
+  // Stream real-time order updates (fills, status changes)
+  rpc StreamOrderUpdates(GetPortfolioRequest) returns (stream OrderUpdate);
+
+  // Get current portfolio summary
+  rpc GetPortfolio(GetPortfolioRequest) returns (PortfolioSummary);
+
+  // List execution fills
+  rpc ListFills(ListFillsRequest) returns (ListFillsResponse);
+}

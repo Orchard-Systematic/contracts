@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package orchard.common.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// ─── Enums ──────────────────────────────────────────────────────────
+
+enum Side {
+  SIDE_UNSPECIFIED = 0;
+  SIDE_BUY = 1;
+  SIDE_SELL = 2;
+}
+
+enum AssetClass {
+  ASSET_CLASS_UNSPECIFIED = 0;
+  ASSET_CLASS_FUTURE = 1;
+  ASSET_CLASS_OPTION = 2;
+  ASSET_CLASS_SPREAD = 3;
+}
+
+enum Exchange {
+  EXCHANGE_UNSPECIFIED = 0;
+  EXCHANGE_CME = 1;
+  EXCHANGE_CBOT = 2;
+  EXCHANGE_NYMEX = 3;
+  EXCHANGE_COMEX = 4;
+  EXCHANGE_ICE = 5;
+  EXCHANGE_LME = 6;
+}
+
+enum CommoditySector {
+  COMMODITY_SECTOR_UNSPECIFIED = 0;
+  COMMODITY_SECTOR_ENERGY = 1;
+  COMMODITY_SECTOR_METALS = 2;
+  COMMODITY_SECTOR_AGRICULTURE = 3;
+  COMMODITY_SECTOR_SOFTS = 4;
+  COMMODITY_SECTOR_LIVESTOCK = 5;
+}
+
+// ─── Core Value Types ───────────────────────────────────────────────
+
+// Decimal value represented as integer + scale to avoid floating point issues.
+// value = unscaled * 10^(-scale)   e.g. unscaled=12345, scale=2 => 123.45
+message DecimalValue {
+  int64 unscaled = 1;
+  uint32 scale = 2;
+}
+
+// Uniquely identifies a tradeable instrument.
+message InstrumentId {
+  string symbol = 1;          // e.g. "CLZ6" (Crude Dec 2026)
+  int32 ib_con_id = 2;        // Interactive Brokers contract ID
+  Exchange exchange = 3;
+  AssetClass asset_class = 4;
+  CommoditySector sector = 5;
+  string underlying = 6;      // e.g. "CL" for crude oil
+  google.protobuf.Timestamp expiry = 7;
+  double tick_size = 8;
+  double point_value = 9;     // dollar value per full point move
+}

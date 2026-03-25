@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package orchard.signals.v1;
+
+import "google/protobuf/timestamp.proto";
+import "orchard/common/v1/common.proto";
+
+// ─── Signal Messages ────────────────────────────────────────────────
+
+enum SignalType {
+  SIGNAL_TYPE_UNSPECIFIED = 0;
+  SIGNAL_TYPE_ENTRY_LONG = 1;
+  SIGNAL_TYPE_ENTRY_SHORT = 2;
+  SIGNAL_TYPE_EXIT = 3;
+  SIGNAL_TYPE_ADJUST = 4;       // resize existing position
+  SIGNAL_TYPE_ROLL = 5;         // roll to next contract month
+}
+
+enum SignalStrength {
+  SIGNAL_STRENGTH_UNSPECIFIED = 0;
+  SIGNAL_STRENGTH_WEAK = 1;
+  SIGNAL_STRENGTH_MODERATE = 2;
+  SIGNAL_STRENGTH_STRONG = 3;
+}
+
+message Signal {
+  string signal_id = 1;
+  string strategy_id = 2;
+  orchard.common.v1.InstrumentId instrument = 3;
+  SignalType signal_type = 4;
+  SignalStrength strength = 5;
+  double target_quantity = 6;       // signed: +buy, -sell
+  double confidence = 7;            // 0.0 to 1.0
+  google.protobuf.Timestamp generated_at = 8;
+  map<string, double> features = 9; // signal feature values for audit
+  string rationale = 10;            // human-readable reason
+}
+
+// Command sent from strategy-engine to OMS
+message SignalCommand {
+  Signal signal = 1;
+  double limit_price = 2;           // 0 = market order
+  double stop_price = 3;            // 0 = no stop
+  uint32 urgency = 4;               // 1 (low) to 5 (immediate)
+  google.protobuf.Timestamp valid_until = 5;
+}
+
+// ─── Strategy State ─────────────────────────────────────────────────
+
+enum StrategyStatus {
+  STRATEGY_STATUS_UNSPECIFIED = 0;
+  STRATEGY_STATUS_ACTIVE = 1;
+  STRATEGY_STATUS_PAUSED = 2;
+  STRATEGY_STATUS_STOPPED = 3;
+  STRATEGY_STATUS_ERROR = 4;
+}
+
+message StrategyState {
+  string strategy_id = 1;
+  string strategy_name = 2;
+  StrategyStatus status = 3;
+  google.protobuf.Timestamp last_signal_at = 4;
+  map<string, double> parameters = 5;
+  map<string, double> metrics = 6;  // sharpe, drawdown, etc.
+  repeated string active_instruments = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+// ─── Signal Service ─────────────────────────────────────────────────
+
+message SubmitSignalRequest {
+  SignalCommand command = 1;
+}
+
+message SubmitSignalResponse {
+  bool accepted = 1;
+  string rejection_reason = 2;
+}
+
+message GetStrategyStateRequest {
+  string strategy_id = 1;
+}
+
+message ListStrategiesRequest {}
+
+message ListStrategiesResponse {
+  repeated StrategyState strategies = 1;
+}
+
+service SignalService {
+  // Strategy engine submits a signal command to the OMS
+  rpc SubmitSignal(SubmitSignalRequest) returns (SubmitSignalResponse);
+
+  // Dashboard queries current strategy state
+  rpc GetStrategyState(GetStrategyStateRequest) returns (StrategyState);
+
+  // List all registered strategies
+  rpc ListStrategies(ListStrategiesRequest) returns (ListStrategiesResponse);
+}
