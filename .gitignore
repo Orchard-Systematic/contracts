@@ -3,3 +3,8 @@ node_modules/
 *.pyc
 __pycache__/
 .venv/
+
+# Secrets
+.env
+.env.local
+.env.*.local
