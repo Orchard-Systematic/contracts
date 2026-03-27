@@ -1,0 +1,379 @@
+syntax = "proto3";
+
+package orchard.backtesting.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "orchard/common/v1/common.proto";
+import "orchard/marketdata/v1/marketdata.proto";
+
+// ─── Backtest Management Service ────────────────────────────────────
+// Called by the dashboard / CLI to submit, monitor, and retrieve backtests.
+
+service BacktestService {
+  // Submit a new backtest job
+  rpc SubmitBacktest(SubmitBacktestRequest) returns (SubmitBacktestResponse);
+
+  // Poll for current status
+  rpc GetBacktestStatus(GetBacktestStatusRequest) returns (BacktestStatus);
+
+  // Retrieve full results after completion
+  rpc GetBacktestResults(GetBacktestResultsRequest) returns (BacktestResults);
+
+  // List all backtests (with optional filters)
+  rpc ListBacktests(ListBacktestsRequest) returns (ListBacktestsResponse);
+
+  // Cancel a running backtest
+  rpc CancelBacktest(CancelBacktestRequest) returns (CancelBacktestResponse);
+
+  // Stream progress updates in real-time
+  rpc StreamProgress(StreamProgressRequest) returns (stream BacktestProgress);
+}
+
+// ─── Strategy Runtime Service ───────────────────────────────────────
+// Bidirectional streaming between the backtest engine and a strategy
+// process.  The strategy process (using the SDK) opens this stream.
+// The engine sends market events; the strategy replies with actions.
+//
+// This is the core language-agnostic interface — any language that can
+// speak gRPC can implement a strategy.
+
+service StrategyRuntime {
+  rpc Execute(stream StrategyAction) returns (stream EngineEvent);
+}
+
+// ─── Engine → Strategy events ───────────────────────────────────────
+
+message EngineEvent {
+  oneof event {
+    BacktestConfig config = 1;
+    BarEvent bar = 2;
+    TickEvent tick = 3;
+    FillEvent fill = 4;
+    OrderStatusEvent order_status = 5;
+    PortfolioSnapshot portfolio = 6;
+    BacktestComplete complete = 7;
+  }
+}
+
+message BacktestConfig {
+  string backtest_id = 1;
+  repeated string symbols = 2;
+  google.protobuf.Timestamp start_time = 3;
+  google.protobuf.Timestamp end_time = 4;
+  double initial_capital = 5;
+  string timeframe = 6;                       // "1m", "5m", "1h", "1d"
+  map<string, string> parameters = 7;         // strategy-specific params
+  FillModelConfig fill_model = 8;
+}
+
+message FillModelConfig {
+  double commission_per_contract = 1;         // e.g. 2.50
+  double slippage_ticks = 2;                  // simulated slippage
+  bool partial_fills = 3;                     // allow partial fills
+}
+
+message BarEvent {
+  string symbol = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  double open = 3;
+  double high = 4;
+  double low = 5;
+  double close = 6;
+  int64 volume = 7;
+  double vwap = 8;
+  int64 open_interest = 9;
+}
+
+message TickEvent {
+  string symbol = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  double bid = 3;
+  double ask = 4;
+  double last = 5;
+  int64 volume = 6;
+}
+
+message FillEvent {
+  string order_id = 1;
+  string client_order_id = 2;
+  string symbol = 3;
+  orchard.common.v1.Side side = 4;
+  int32 quantity = 5;
+  double price = 6;
+  double commission = 7;
+  google.protobuf.Timestamp timestamp = 8;
+}
+
+message OrderStatusEvent {
+  string order_id = 1;
+  string client_order_id = 2;
+  OrderState state = 3;
+  int32 filled_quantity = 4;
+  int32 remaining_quantity = 5;
+  double average_price = 6;
+  string message = 7;
+}
+
+message PortfolioSnapshot {
+  double equity = 1;
+  double cash = 2;
+  double unrealised_pnl = 3;
+  double realised_pnl = 4;
+  repeated PositionSnapshot positions = 5;
+  google.protobuf.Timestamp timestamp = 6;
+}
+
+message PositionSnapshot {
+  string symbol = 1;
+  int32 quantity = 2;
+  double average_cost = 3;
+  double market_price = 4;
+  double unrealised_pnl = 5;
+}
+
+message BacktestComplete {
+  string backtest_id = 1;
+  bool success = 2;
+  string error_message = 3;
+}
+
+// ─── Strategy → Engine actions ──────────────────────────────────────
+
+message StrategyAction {
+  oneof action {
+    StrategyReady ready = 1;
+    PlaceOrder place_order = 2;
+    CancelOrder cancel_order = 3;
+    StrategyLog log = 4;
+    StrategyDone done = 5;
+  }
+}
+
+message StrategyReady {
+  string strategy_name = 1;
+  string strategy_version = 2;
+  map<string, string> metadata = 3;
+}
+
+message PlaceOrder {
+  string client_order_id = 1;
+  string symbol = 2;
+  orchard.common.v1.Side side = 3;
+  int32 quantity = 4;
+  OrderType order_type = 5;
+  double limit_price = 6;
+  double stop_price = 7;
+  TimeInForce time_in_force = 8;
+}
+
+message CancelOrder {
+  string client_order_id = 1;
+}
+
+message StrategyLog {
+  LogLevel level = 1;
+  string message = 2;
+  map<string, string> fields = 3;
+}
+
+message StrategyDone {
+  string reason = 1;
+}
+
+// ─── Shared enums ───────────────────────────────────────────────────
+
+enum OrderType {
+  ORDER_TYPE_UNSPECIFIED = 0;
+  ORDER_TYPE_MARKET = 1;
+  ORDER_TYPE_LIMIT = 2;
+  ORDER_TYPE_STOP = 3;
+  ORDER_TYPE_STOP_LIMIT = 4;
+}
+
+enum OrderState {
+  ORDER_STATE_UNSPECIFIED = 0;
+  ORDER_STATE_PENDING = 1;
+  ORDER_STATE_SUBMITTED = 2;
+  ORDER_STATE_PARTIALLY_FILLED = 3;
+  ORDER_STATE_FILLED = 4;
+  ORDER_STATE_CANCELLED = 5;
+  ORDER_STATE_REJECTED = 6;
+}
+
+enum TimeInForce {
+  TIME_IN_FORCE_UNSPECIFIED = 0;
+  TIME_IN_FORCE_DAY = 1;
+  TIME_IN_FORCE_GTC = 2;
+  TIME_IN_FORCE_IOC = 3;
+  TIME_IN_FORCE_FOK = 4;
+}
+
+enum LogLevel {
+  LOG_LEVEL_UNSPECIFIED = 0;
+  LOG_LEVEL_DEBUG = 1;
+  LOG_LEVEL_INFO = 2;
+  LOG_LEVEL_WARN = 3;
+  LOG_LEVEL_ERROR = 4;
+}
+
+// ─── Backtest management messages ───────────────────────────────────
+
+enum BacktestState {
+  BACKTEST_STATE_UNSPECIFIED = 0;
+  BACKTEST_STATE_QUEUED = 1;
+  BACKTEST_STATE_RUNNING = 2;
+  BACKTEST_STATE_COMPLETED = 3;
+  BACKTEST_STATE_FAILED = 4;
+  BACKTEST_STATE_CANCELLED = 5;
+}
+
+message SubmitBacktestRequest {
+  string strategy_name = 1;            // e.g. "momentum/trend_following"
+  string strategy_language = 2;        // "python", "csharp", "cpp"
+  repeated string symbols = 3;
+  google.protobuf.Timestamp start_time = 4;
+  google.protobuf.Timestamp end_time = 5;
+  string timeframe = 6;                // "1m", "5m", "1h", "1d"
+  double initial_capital = 7;
+  map<string, string> parameters = 8;  // strategy-specific key=value
+  FillModelConfig fill_model = 9;
+}
+
+message SubmitBacktestResponse {
+  string backtest_id = 1;
+  BacktestState state = 2;
+}
+
+message GetBacktestStatusRequest {
+  string backtest_id = 1;
+}
+
+message BacktestStatus {
+  string backtest_id = 1;
+  BacktestState state = 2;
+  double progress_pct = 3;             // 0.0 – 100.0
+  int64 bars_processed = 4;
+  int64 bars_total = 5;
+  google.protobuf.Timestamp started_at = 6;
+  google.protobuf.Duration elapsed = 7;
+  string error_message = 8;
+}
+
+message GetBacktestResultsRequest {
+  string backtest_id = 1;
+}
+
+message BacktestResults {
+  string backtest_id = 1;
+  string strategy_name = 2;
+  BacktestState state = 3;
+
+  // Timing
+  google.protobuf.Timestamp started_at = 4;
+  google.protobuf.Timestamp finished_at = 5;
+  google.protobuf.Duration elapsed = 6;
+
+  // Portfolio summary
+  double initial_capital = 10;
+  double final_equity = 11;
+  double total_return_pct = 12;
+  double annualised_return_pct = 13;
+
+  // Risk metrics
+  double sharpe_ratio = 20;
+  double sortino_ratio = 21;
+  double max_drawdown_pct = 22;
+  double max_drawdown_duration_days = 23;
+  double calmar_ratio = 24;
+  double volatility_ann_pct = 25;
+
+  // Trade statistics
+  int32 total_trades = 30;
+  int32 winning_trades = 31;
+  int32 losing_trades = 32;
+  double win_rate_pct = 33;
+  double profit_factor = 34;
+  double avg_trade_pnl = 35;
+  double avg_winner = 36;
+  double avg_loser = 37;
+  double largest_winner = 38;
+  double largest_loser = 39;
+  double total_commission = 40;
+
+  // Time series (sampled)
+  repeated EquityPoint equity_curve = 50;
+  repeated DrawdownPoint drawdown_curve = 51;
+  repeated TradeRecord trades = 52;
+}
+
+message EquityPoint {
+  google.protobuf.Timestamp timestamp = 1;
+  double equity = 2;
+}
+
+message DrawdownPoint {
+  google.protobuf.Timestamp timestamp = 1;
+  double drawdown_pct = 2;
+}
+
+message TradeRecord {
+  string trade_id = 1;
+  string symbol = 2;
+  orchard.common.v1.Side side = 3;
+  int32 quantity = 4;
+  double entry_price = 5;
+  double exit_price = 6;
+  google.protobuf.Timestamp entry_time = 7;
+  google.protobuf.Timestamp exit_time = 8;
+  double pnl = 9;
+  double commission = 10;
+  double return_pct = 11;
+  google.protobuf.Duration holding_period = 12;
+}
+
+message ListBacktestsRequest {
+  BacktestState state_filter = 1;      // 0 = all states
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+message ListBacktestsResponse {
+  repeated BacktestSummary backtests = 1;
+  int32 total_count = 2;
+}
+
+message BacktestSummary {
+  string backtest_id = 1;
+  string strategy_name = 2;
+  BacktestState state = 3;
+  google.protobuf.Timestamp submitted_at = 4;
+  google.protobuf.Timestamp finished_at = 5;
+  double total_return_pct = 6;
+  double sharpe_ratio = 7;
+  double max_drawdown_pct = 8;
+  int32 total_trades = 9;
+}
+
+message CancelBacktestRequest {
+  string backtest_id = 1;
+}
+
+message CancelBacktestResponse {
+  bool cancelled = 1;
+  string message = 2;
+}
+
+message StreamProgressRequest {
+  string backtest_id = 1;
+}
+
+message BacktestProgress {
+  string backtest_id = 1;
+  double progress_pct = 2;
+  int64 bars_processed = 3;
+  double current_equity = 4;
+  int32 open_positions = 5;
+  int32 total_trades = 6;
+  google.protobuf.Timestamp current_time = 7;   // simulation time
+}
