@@ -35,6 +35,7 @@ enum TimeInForce {
   TIME_IN_FORCE_GTC = 2;
   TIME_IN_FORCE_IOC = 3;
   TIME_IN_FORCE_GTD = 4;
+  TIME_IN_FORCE_FOK = 5;
 }
 
 message Order {
@@ -43,21 +44,22 @@ message Order {
   int32 ib_order_id = 3;
   string signal_id = 4;            // originating signal
   string strategy_id = 5;
+  string account_id = 24;          // broker account identifier
 
   orchard.common.v1.InstrumentId instrument = 6;
   orchard.common.v1.Side side = 7;
   OrderType order_type = 8;
   TimeInForce time_in_force = 9;
 
-  double quantity = 10;
-  double limit_price = 11;
-  double stop_price = 12;
-  double trail_amount = 13;
+  orchard.common.v1.DecimalValue quantity = 10;
+  orchard.common.v1.DecimalValue limit_price = 11;
+  orchard.common.v1.DecimalValue stop_price = 12;
+  double trail_amount = 13;        // trailing stop — dimensionless ratio, stays double
 
   OrderStatus status = 14;
-  double filled_quantity = 15;
-  double average_fill_price = 16;
-  double commission = 17;
+  orchard.common.v1.DecimalValue filled_quantity = 15;
+  orchard.common.v1.DecimalValue average_fill_price = 16;
+  orchard.common.v1.DecimalValue commission = 17;
 
   google.protobuf.Timestamp created_at = 18;
   google.protobuf.Timestamp updated_at = 19;
@@ -75,46 +77,49 @@ message Fill {
   string execution_id = 3;         // IB execution ID
   orchard.common.v1.InstrumentId instrument = 4;
   orchard.common.v1.Side side = 5;
-  double quantity = 6;
-  double price = 7;
-  double commission = 8;
+  orchard.common.v1.DecimalValue quantity = 6;
+  orchard.common.v1.DecimalValue price = 7;
+  orchard.common.v1.DecimalValue commission = 8;
   google.protobuf.Timestamp filled_at = 9;
   string exchange = 10;            // actual execution venue
+  string account_id = 11;          // broker account identifier
 }
 
 // ─── Position Messages ──────────────────────────────────────────────
 
 message Position {
   orchard.common.v1.InstrumentId instrument = 1;
-  double quantity = 2;              // signed: +long, -short
-  double average_cost = 3;
-  double market_price = 4;
-  double market_value = 5;
-  double unrealized_pnl = 6;
-  double realized_pnl = 7;
-  double daily_pnl = 8;
+  orchard.common.v1.DecimalValue quantity = 2;              // signed: +long, -short
+  orchard.common.v1.DecimalValue average_cost = 3;
+  orchard.common.v1.DecimalValue market_price = 4;
+  orchard.common.v1.DecimalValue market_value = 5;
+  orchard.common.v1.DecimalValue unrealized_pnl = 6;
+  orchard.common.v1.DecimalValue realized_pnl = 7;
+  orchard.common.v1.DecimalValue daily_pnl = 8;
   google.protobuf.Timestamp updated_at = 9;
+  string account_id = 10;          // broker account identifier
 }
 
 message PortfolioSummary {
-  double net_liquidation = 1;
-  double total_unrealized_pnl = 2;
-  double total_realized_pnl = 3;
-  double daily_pnl = 4;
-  double buying_power = 5;
-  double margin_used = 6;
-  double margin_available = 7;
+  orchard.common.v1.DecimalValue net_liquidation = 1;
+  orchard.common.v1.DecimalValue total_unrealized_pnl = 2;
+  orchard.common.v1.DecimalValue total_realized_pnl = 3;
+  orchard.common.v1.DecimalValue daily_pnl = 4;
+  orchard.common.v1.DecimalValue buying_power = 5;
+  orchard.common.v1.DecimalValue margin_used = 6;
+  orchard.common.v1.DecimalValue margin_available = 7;
   repeated Position positions = 8;
   google.protobuf.Timestamp as_of = 9;
+  string account_id = 10;          // broker account identifier
 }
 
 // ─── Risk Messages ──────────────────────────────────────────────────
 
 message RiskLimits {
-  double max_position_per_instrument = 1;   // max contracts per symbol
-  double max_portfolio_exposure = 2;        // max total notional
-  double max_daily_loss = 3;                // stop trading if exceeded
-  double max_order_size = 4;                // single order cap
+  orchard.common.v1.DecimalValue max_position_per_instrument = 1;   // max contracts per symbol
+  orchard.common.v1.DecimalValue max_portfolio_exposure = 2;        // max total notional
+  orchard.common.v1.DecimalValue max_daily_loss = 3;                // stop trading if exceeded
+  orchard.common.v1.DecimalValue max_order_size = 4;                // single order cap
   uint32 max_open_orders = 5;
 }
 
