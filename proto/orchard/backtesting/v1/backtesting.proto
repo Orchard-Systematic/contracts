@@ -6,7 +6,6 @@ import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
 import "orchard/common/v1/common.proto";
 import "orchard/execution/v1/execution.proto";
-import "orchard/marketdata/v1/marketdata.proto";
 
 // ─── Backtest Management Service ────────────────────────────────────
 // Called by the dashboard / CLI to submit, monitor, and retrieve backtests.

@@ -5,6 +5,15 @@ modules:
 lint:
   use:
     - STANDARD
+  except:
+    # Renaming these would change generated type names consumed by every
+    # service (strategy-engine, trellis, oms, market-data-provider,
+    # order-execution-provider, seedbed, harvest) - a breaking cross-repo
+    # change, not a CI fix. Revisit deliberately, not as a lint-driven rename.
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
+    - RPC_REQUEST_RESPONSE_UNIQUE
+    - SERVICE_SUFFIX
   enum_zero_value_suffix: _UNSPECIFIED
 breaking:
   use:
