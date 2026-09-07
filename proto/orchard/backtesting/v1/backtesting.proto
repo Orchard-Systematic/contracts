@@ -208,8 +208,24 @@ message StrategyMetrics {
   double avg_win = 11;
   double avg_loss = 12;
 
-  // Strategy-specific indicator set (zscore, ema_fast, bb_upper, ...)
+  // Strategy-specific indicator set (zscore, ema_fast, bb_upper, ...).
+  // For a multi-symbol strategy this is necessarily just the most recent
+  // bar's values regardless of which symbol produced it — use by_symbol
+  // below for a per-instrument breakdown instead.
   map<string, double> live_indicators = 20;
+
+  // Per-symbol breakdown (close/position/bars + that symbol's own
+  // indicator set) for strategies trading more than one instrument.
+  // Optional: a single-symbol strategy may leave this empty and rely on
+  // live_indicators/positions above instead.
+  map<string, SymbolMetrics> by_symbol = 21;
+}
+
+message SymbolMetrics {
+  double close = 1;
+  double position = 2; // signed quantity, +long / -short
+  int32 bars_buffered = 3;
+  map<string, double> indicators = 4; // this symbol's own ema_fast, zscore, ...
 }
 
 message StrategyRiskLimits {
